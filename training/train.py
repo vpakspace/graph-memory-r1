@@ -59,7 +59,7 @@ def main():
 
     trainer = GRPOMemoryTrainer(output_dir=args.output)
     print("Setting up GRPO trainer...")
-    trainer.setup()
+    trainer.setup(dataset=train_dataset)
 
     print("Starting training...")
     metrics = trainer.train(train_dataset)

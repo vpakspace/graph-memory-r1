@@ -27,7 +27,7 @@ class GRPOMemoryTrainer:
         self._tokenizer = None
         self._trainer = None
 
-    def setup(self) -> None:
+    def setup(self, dataset=None) -> None:
         """Load model, tokenizer, and configure GRPO trainer."""
         from peft import LoraConfig
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -46,7 +46,7 @@ class GRPOMemoryTrainer:
         # Load model
         self._model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype="auto",
+            dtype="auto",
             device_map="auto",
             trust_remote_code=True,
         )
@@ -66,8 +66,7 @@ class GRPOMemoryTrainer:
             per_device_train_batch_size=settings.training.batch_size,
             gradient_accumulation_steps=settings.training.gradient_accumulation_steps,
             learning_rate=settings.training.learning_rate,
-            kl_coef=settings.training.kl_coef,
-            max_prompt_length=settings.training.max_prompt_length,
+            beta=settings.training.kl_coef,
             max_completion_length=settings.training.max_completion_length,
             num_train_epochs=settings.training.epochs,
             logging_steps=10,
@@ -78,24 +77,30 @@ class GRPOMemoryTrainer:
         self._trainer = GRPOTrainer(
             model=self._model,
             reward_funcs=[self._reward_fn],
-            config=grpo_config,
+            args=grpo_config,
+            train_dataset=dataset,
             peft_config=lora_config,
             processing_class=self._tokenizer,
         )
 
-    def _reward_fn(self, completions: list[str], **kwargs) -> list[float]:
+    def _reward_fn(self, prompts, completions, **kwargs) -> list[float]:
         """Reward function for GRPO.
 
         Called by trl GRPOTrainer for each group of completions.
         In production, this orchestrates: parse ops → execute → answer → score.
         For initial training, we use a simplified structural reward.
+
+        Args:
+            prompts: List of prompt strings.
+            completions: List of completion strings.
         """
         from memory.operations import parse_tool_calls, validate_operations
         from training.reward import content_placement_score
 
         rewards = []
         for completion in completions:
-            ops = parse_tool_calls(completion)
+            text = completion if isinstance(completion, str) else str(completion)
+            ops = parse_tool_calls(text)
 
             # Tool validity
             tool_score = validate_operations(ops) if ops else 0.0
@@ -121,7 +126,7 @@ class GRPOMemoryTrainer:
             Training metrics dict.
         """
         if self._trainer is None:
-            self.setup()
+            self.setup(dataset=dataset)
 
         result = self._trainer.train()
 

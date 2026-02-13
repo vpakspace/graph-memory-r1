@@ -74,31 +74,46 @@ def load_locomo(data_path: str) -> dict[str, Any]:
         raise ValueError(f"Unexpected dataset format: {type(data)}")
 
     for item in items:
-        conv_id = str(item.get("conversation_id", item.get("id", len(conversations))))
+        conv_id = str(item.get("conversation_id", item.get("sample_id", item.get("id", len(conversations)))))
 
-        # Parse conversation turns
+        # Parse conversation turns — handle LoCoMo session-based format
         turns = []
         raw_conv = item.get("conversation", item.get("turns", []))
-        for i, turn in enumerate(raw_conv):
-            if isinstance(turn, dict):
-                speaker = turn.get("speaker", turn.get("role", f"Speaker{i % 2}"))
-                text = turn.get("text", turn.get("content", ""))
-            elif isinstance(turn, str):
-                speaker = f"Speaker{i % 2}"
-                text = turn
-            else:
-                continue
-            turns.append(ConversationTurn(speaker=speaker, text=text, turn_id=i))
+        if isinstance(raw_conv, dict):
+            # LoCoMo format: dict with session_N keys containing turn lists
+            turn_idx = 0
+            session_num = 1
+            while f"session_{session_num}" in raw_conv:
+                session_turns = raw_conv[f"session_{session_num}"]
+                for turn in session_turns:
+                    if isinstance(turn, dict):
+                        speaker = turn.get("speaker", f"Speaker{turn_idx % 2}")
+                        text = turn.get("text", "")
+                        turns.append(ConversationTurn(speaker=speaker, text=text, turn_id=turn_idx))
+                        turn_idx += 1
+                session_num += 1
+        elif isinstance(raw_conv, list):
+            for i, turn in enumerate(raw_conv):
+                if isinstance(turn, dict):
+                    speaker = turn.get("speaker", turn.get("role", f"Speaker{i % 2}"))
+                    text = turn.get("text", turn.get("content", ""))
+                elif isinstance(turn, str):
+                    speaker = f"Speaker{i % 2}"
+                    text = turn
+                else:
+                    continue
+                turns.append(ConversationTurn(speaker=speaker, text=text, turn_id=i))
 
-        # Parse QA pairs
+        # Parse QA pairs — handle both 'qa' and 'questions' keys
         qa_pairs = []
-        raw_qa = item.get("questions", item.get("qa_pairs", []))
+        raw_qa = item.get("qa", item.get("questions", item.get("qa_pairs", [])))
         for qa in raw_qa:
             if isinstance(qa, dict):
+                category = qa.get("category", qa.get("type", ""))
                 qa_pairs.append(QAPair(
                     question=qa.get("question", qa.get("q", "")),
                     answer=qa.get("answer", qa.get("a", "")),
-                    category=qa.get("category", qa.get("type", "")),
+                    category=str(category),
                     conversation_id=conv_id,
                 ))
 
