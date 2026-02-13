@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+checkpoints/
+*.pt
+*.bin
+data/locomo/*.json
+.venv/

@@ -1,0 +1,28 @@
+# Core ML
+torch>=2.1.0
+transformers>=4.40.0
+accelerate>=0.30.0
+trl>=0.12.0
+peft>=0.13.0
+bitsandbytes>=0.44.0
+
+# Graph
+neo4j>=5.20.0
+numpy>=1.26.0
+sentence-transformers>=3.0.0
+
+# Eval & retrieval
+openai>=1.30.0
+rank-bm25>=0.2.2
+
+# UI
+streamlit>=1.35.0
+
+# Config
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+
+# Test
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
