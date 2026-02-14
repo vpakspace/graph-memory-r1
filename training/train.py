@@ -1,7 +1,15 @@
 """Training entry point for Graph-Memory-R1.
 
 Usage:
-    python training/train.py --data data/locomo/locomo10.json --epochs 3
+    # Structural reward (format only, no external deps):
+    python training/train.py --data data/locomo/locomo10.json --epochs 1
+
+    # Full reward (Neo4j + GPT-4o-mini Answer Agent):
+    python training/train.py --data data/locomo/locomo10.json --epochs 2 --reward full
+
+    # Resume from structural checkpoint with full reward:
+    python training/train.py --data data/locomo/locomo10.json --epochs 2 --reward full \
+        --resume checkpoints/
 """
 
 from __future__ import annotations
@@ -25,6 +33,13 @@ def main():
     parser.add_argument("--data", required=True, help="Path to LoCoMo dataset JSON")
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--output", default="checkpoints")
+    parser.add_argument(
+        "--reward",
+        choices=["structural", "full"],
+        default="structural",
+        help="Reward mode: structural (format only) or full (Neo4j + QA)",
+    )
+    parser.add_argument("--resume", default=None, help="Resume from checkpoint dir")
     args = parser.parse_args()
 
     print(f"Loading dataset from {args.data}")
@@ -52,19 +67,35 @@ def main():
     # Create HuggingFace Dataset
     train_dataset = Dataset.from_list(prompts)
 
+    # Collect QA pairs for full reward mode
+    qa_pairs = []
+    if args.reward == "full":
+        for qa in data["qa_pairs"]:
+            qa_pairs.append({
+                "question": qa.question,
+                "answer": qa.answer,
+                "category": qa.category,
+            })
+        print(f"Full reward mode: {len(qa_pairs)} QA pairs for evaluation")
+
     # Setup and run trainer
     settings = get_settings()
     settings.training.epochs = args.epochs
     settings.training.output_dir = args.output
 
-    trainer = GRPOMemoryTrainer(output_dir=args.output)
-    print("Setting up GRPO trainer...")
+    trainer = GRPOMemoryTrainer(
+        output_dir=args.output,
+        reward_mode=args.reward,
+        qa_pairs=qa_pairs,
+        resume_from=args.resume,
+    )
+    print(f"Setting up GRPO trainer (reward={args.reward})...")
     trainer.setup(dataset=train_dataset)
 
     print("Starting training...")
     metrics = trainer.train(train_dataset)
 
-    print(f"Training complete!")
+    print("Training complete!")
     print(f"  Loss: {metrics.get('train_loss', 'N/A')}")
     print(f"  LoRA saved: {metrics.get('lora_path', 'N/A')}")
 
