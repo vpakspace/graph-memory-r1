@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pytest pytest-asyncio python-dotenv pydantic pydantic-settings
-          pip install openai rank-bm25 numpy
+          pip install openai rank-bm25 numpy neo4j
 
       - name: Run unit tests
         run: pytest tests/ -x -q --ignore=tests/test_agents.py
